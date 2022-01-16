@@ -4,7 +4,8 @@ const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 //const encrypt = require("mongoose-encryption");
-const md5 = require("md5");
+//const md5 = require("md5");
+const bcrypt = require('bcrypt');
 
 const app = express()
 app.use(express.static('public'));
@@ -32,22 +33,26 @@ app.get("/register", (req,res)=>{
 });
 
 app.post("/login", (req,res)=>{
-    User.find({email: req.body.username, password: md5(req.body.password)}, (err)=>{
-        if(err){
-            console.log(err);
-        } else {
-            res.render("secrets.ejs");
-        }
-    });
-});
+    bcrypt.hash(req.body.password, 2, function(error, hash) {
+        User.find({email: req.body.username, password: hash}, (err)=>{
+            if(err){
+                console.log(err);
+            } else {
+                res.render("secrets.ejs");
+            }
+        });
+    }
+)});
 
 app.post("/register", (req,res)=>{
-    User.create({email: req.body.username, password: md5(req.body.password)}, (err)=>{
-        if(err) {
-            console.log(err);
-        } else {
-            res.render("secrets.ejs")
-        }
+    bcrypt.hash(req.body.password, 2, function(error, hash) {
+        User.create({email: req.body.username, password: hash}, (err)=>{
+            if(err) {
+                console.log(err);
+            } else {
+                res.render("secrets.ejs")
+            }
+        });
     });
 });
 
