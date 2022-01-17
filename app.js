@@ -3,22 +3,34 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-//const encrypt = require("mongoose-encryption");
-//const md5 = require("md5");
-const bcrypt = require('bcrypt');
+const session = require("express-session");
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
 
 const app = express()
 app.use(express.static('public'));
 app.set('veiwengine', ejs);
 app.use(bodyParser.urlencoded({extended:true}));
 
+app.use(session({
+    secret: 'This-is-a-secret-string',
+    resave: false,
+    saveUninitialized: true,
+  }));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
 //mongoose
 mongoose.connect('mongodb://localhost:27017/userDB')
 const userSchema = new mongoose.Schema({email: String, password: String});
-const key = process.env.ENCRYPTION_KEY
-//userSchema.plugin(encrypt, {secret: key, encrptedFields: 'password'});
+userSchema.plugin(passportLocalMongoose);
 const User = new mongoose.model("User", userSchema);
 
+//passport
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.get("/", (req,res)=>{
     res.render('home.ejs');
@@ -28,33 +40,43 @@ app.get("/login", (req,res)=>{
     res.render('login.ejs');
 });
 
+app.get("/secrets", (req,res)=>{
+    if (req.isAuthenticated()){
+        res.render("secrets.ejs");
+    } else{
+        res.redirect("/login");
+    }
+});
+
 app.get("/register", (req,res)=>{
     res.render('register.ejs');
 });
 
 app.post("/login", (req,res)=>{
-    bcrypt.hash(req.body.password, 2, function(error, hash) {
-        User.find({email: req.body.username, password: hash}, (err)=>{
-            if(err){
-                console.log(err);
-            } else {
-                res.render("secrets.ejs");
-            }
-        });
-    }
-)});
-
-app.post("/register", (req,res)=>{
-    bcrypt.hash(req.body.password, 2, function(error, hash) {
-        User.create({email: req.body.username, password: hash}, (err)=>{
-            if(err) {
-                console.log(err);
-            } else {
-                res.render("secrets.ejs")
-            }
-        });
+    const user = {username: req.body.username, password: req.body.password};
+    req.login(user, (err)=>{
+        if(err){
+            res.redirect("/login");
+        }
+        else{
+            passport.authenticate("local")(req, res, ()=>{
+                res.redirect("/secrets");
+            });
+        }
     });
 });
 
+app.post("/register", (req,res)=>{
+    User.register({username: req.body.username}, req.body.password, (err, user)=>{
+        if(err) { 
+            res.redirect("/register");
+        }
+        else{
+            passport.authenticate("local")(req, res, ()=>{
+                res.redirect("/secrets");
+            });
+        }
+    });
+});
 
 app.listen(3000, ()=> {console.log("server has begun running...")})
